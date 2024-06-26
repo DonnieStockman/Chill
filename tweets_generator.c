@@ -6,82 +6,59 @@
 #define DELIMITERS " \n\t\r"
 
 #define FULL_FILE (-1)
+#define BUFFER_SIZE 1002
+
+int check_dot (const char *word)
+{
+  if (word[strlen (word) - 1] == '.')
+  {
+    return 0;
+  }
+  return 1;
+}
 
 int fill_database (FILE *fp, int words_to_read, MarkovChain *markov_chain)
 {
-  char buffer[1002];
-  if (words_to_read == FULL_FILE)
+  char buffer[BUFFER_SIZE];
+
+  int k = 0;
+  MarkovNode *prev = NULL;
+  while ((fgets (buffer, BUFFER_SIZE, fp) != NULL) && (words_to_read >= k ||
+                                                       words_to_read
+                                                       == FULL_FILE))
   {
-    int k = 0;
-    while (fgets (buffer, 1002, fp) != NULL)
+    char *token = strtok (buffer, DELIMITERS);
+
+    while (token != NULL && (words_to_read >= k ||
+                             words_to_read == FULL_FILE))
     {
-      char *token = strtok (buffer, DELIMITERS);
-
-      Node *prev = NULL;
-      while (token != NULL)
+      Node *new_word = add_to_database (markov_chain, token);
+      if (new_word == NULL)
       {
-        char *data = malloc (strlen (token) * sizeof (char));
-        strcpy (data, token);
-        Node *new_word = add_to_database (markov_chain, data);
-        if (new_word == NULL)
-        {
-          return EXIT_FAILURE;
-        }
-
-        if (prev != NULL && prev->data->data[strlen
-                                                 (prev->data->data) - 1]
-                            != '.')
-        {
-          if (add_node_to_frequency_list (prev->data,
-                                          new_word->data) == 1)
-          {
-            return EXIT_FAILURE;
-          };
-        }
-
-        prev = new_word;
-        token = strtok (NULL, DELIMITERS);
+        return EXIT_FAILURE;
       }
-      k += 1;
-      printf ("%d\n", k);
-    }
-  }
-  else
-  {
-    int k = 0;
-    while (fgets (buffer, 1002, fp) != NULL && k < words_to_read)
-    {
-      char *token = strtok (buffer, DELIMITERS);
-
-      Node *prev = NULL;
-      while (token != NULL && k < words_to_read)
+      if (words_to_read != FULL_FILE)
       {
-        char *data = malloc (strlen (token) * sizeof (char));
-        strcpy (data, token);
-        Node *new_word = add_to_database (markov_chain, data);
-        if (new_word == NULL)
-        {
-          return EXIT_FAILURE;
-        }
         k += 1;
-
-        if (prev != NULL && prev->data->data[strlen
-                                                 (prev->data->data) - 1]
-                            != '.')
-        {
-          if (add_node_to_frequency_list (prev->data,
-                                          new_word->data) == 1)
-          {
-            return EXIT_FAILURE;
-          };
-        }
-
-        prev = new_word;
-        token = strtok (NULL, DELIMITERS);
       }
+      if (prev != NULL)
+      {
+        if (add_node_to_frequency_list (prev,
+                                        new_word->data) == 1)
+        {
+          return EXIT_FAILURE;
+        }
+      }
+      prev = new_word->data;
+      if (check_dot (token) == 0)
+      {
+        prev = NULL;
+      }
+//      printf ("Token: %s\nLast element: %s\n", token,
+//              markov_chain->database->last->data->data);
+      token = strtok (NULL, DELIMITERS);
     }
   }
-
   return EXIT_SUCCESS;
 }
 
@@ -104,6 +81,7 @@ int main (int argc, char *argv[])
   if (database == NULL)
   {
     fclose (corpus);
+    fprintf (stdout, "%s", ALLOCATION_ERROR_MASSAGE);
     return EXIT_FAILURE;
   }
   *database = (LinkedList) {NULL, NULL, 0};
@@ -114,33 +92,44 @@ int main (int argc, char *argv[])
     fclose (corpus);
     free (database);
     database = NULL;
+    fprintf (stdout, "%s", ALLOCATION_ERROR_MASSAGE);
     return EXIT_FAILURE;
   }
   *markov_chain = (MarkovChain) {database};
 
+  int words_to_read = FULL_FILE;
   if (argc == 5)
   {
-    int words_to_read = strtol (argv[4], NULL, 10);
-    if (fill_database (corpus, words_to_read, markov_chain) == 1)
-    {
-      fclose (corpus);
-      free_database (&markov_chain);
-      return EXIT_FAILURE;
-    }
+    words_to_read = strtol (argv[4], NULL, 10);
   }
-  else
+  if (fill_database (corpus, words_to_read, markov_chain) == 1)
   {
-    if (fill_database (corpus, FULL_FILE, markov_chain) == 1)
-    {
-      fclose (corpus);
-      free_database (&markov_chain);
-      return EXIT_FAILURE;
-    }
+    fclose (corpus);
+    free_database (&markov_chain);
+    return EXIT_FAILURE;
   }
   // add fill_database call with relevant memory allocation and other logic ...
   fclose (corpus);
-  printf ("%s\n%s", markov_chain->database->first->data->data,
-          markov_chain->database->last->data->data);
+
+//  Node* temp = database->first;
+//  while (temp != NULL)
+//  {
+//    printf("%s\n", temp->data->data);
+//    temp = temp->next;
+//  }
+//  printf ("%s\n%s", markov_chain->database->first->data->data,
+//          markov_chain->database->last->data->data);
+
+  int num_of_tweets = strtol(argv[2], NULL, 10);
+  for (int i = 0; i < num_of_tweets; i++)
+  {
+    MarkovNode* first = get_first_random_node (markov_chain);
+
+    fprintf (stdout, "Tweet %d: ", i + 1);
+    generate_tweet (first, 20);
+  }
+
+//  free_database (&markov_chain);
   return EXIT_SUCCESS;
 }
 
